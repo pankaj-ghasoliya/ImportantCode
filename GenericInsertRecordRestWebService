@@ -1,0 +1,87 @@
+@RestResource(urlMapping='/SObject/*')
+global class InsertRestWebService {
+    
+    @HttpPost
+    global static List<ResponseWrapper> InsertRestWebService(){
+        RestRequest req = RestContext.request;
+        String jsonRequest = req.requestBody.tostring();
+        System.debug(jsonRequest);
+        
+        RequestWrapper RequestWrapperInstnace = (RequestWrapper)JSON.deserialize(jsonRequest, RequestWrapper.class);
+        
+        List<records> recordsList = RequestWrapperInstnace.records;
+        String sObjectType = RequestWrapperInstnace.Type;
+        
+        return createAccount(recordsList, sObjectType);
+    }
+    
+    private static List<ResponseWrapper> createAccount(List<records> recordsList, String sObjectType) {
+        
+        SObjectType sObjType = ((SObject) Type.forName(sObjectType).newInstance()).getSObjectType();
+
+        List<SObject> accountToInsert = new List<SObject>(); // sobject
+        for(records reco : recordsList) {
+            //if(sObjType == Account.getSObjectType()){
+                //SObject acc = reco.record;
+                accountToInsert.add(reco.record);
+            //}
+        }
+        
+        List<ResponseWrapper> reponseToReturn = new List<ResponseWrapper>();
+        if(!accountToInsert.isEmpty()){
+            Database.SaveResult[] result = Database.insert(accountToInsert, false);
+            System.debug(result);
+			
+            for(Integer i = 0 ; i < recordsList.size(); i++) {
+                ResponseWrapper responseWrapperInstance = new ResponseWrapper();
+                responseWrapperInstance.referenceId = recordsList[i].referenceId;
+                responseWrapperInstance.errors = new List<ErrorResponse>();
+                
+                if(result[i].isSuccess()){
+                    responseWrapperInstance.Id = result[i].getId();
+                    responseWrapperInstance.success = true;
+                }
+                
+                if(!result[i].isSuccess()){
+                    responseWrapperInstance.success = false;
+                    responseWrapperInstance.Id = '';
+                    for(Database.Error err : result[i].getErrors()){
+                        ErrorResponse errorResponseInstance = new ErrorResponse();
+                        errorResponseInstance.message = err.getMessage();
+                        errorResponseInstance.field = err.getFields();
+						responseWrapperInstance.errors.add(errorResponseInstance);
+                    }
+                }
+                reponseToReturn.add(responseWrapperInstance);
+            }
+        }
+        return reponseToReturn;
+    }
+    
+/********************************************************************************************************
+ * Wrapper class in Request Body and Response Body......
+ ********************************************************************************************************/
+    
+    public class RequestWrapper {
+        public String type;
+        public List<records> records;
+    }
+    
+    public class records {
+        public String referenceId;
+        public SObject record;
+    }
+    
+    global class ResponseWrapper {
+        public String referenceId;
+        public String Id;
+        public Boolean success;
+        public List<ErrorResponse> errors;
+    }
+    
+    public class ErrorResponse {
+        public String message;
+        public List<String> field;
+    }
+
+}
