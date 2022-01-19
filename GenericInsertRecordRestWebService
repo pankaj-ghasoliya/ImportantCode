@@ -85,3 +85,51 @@ global class InsertRestWebService {
     }
 
 }
+
+
+
+-----------------------------Rest JSON Structure ---------------------------
+
+{
+    "type" : "Contact",
+    "records":[
+        {
+        "referenceId":"0822",
+        "record" : {
+            "Attributes" : {"type" : "Contact"},
+            "Lastname" : "soifjseoi",
+            "Title" : "www.salesforce.com",
+            "Department" : "100",
+            "LeadSource" : "Banking",
+            "AccountId" : "0010m00000kFqhBAAS",
+            "MobilePhone" : "876547567",
+            "OtherPhone" : "546789",
+            "Fax" : "Banking",
+            "Email" : "test@test.com"
+        }
+        },{
+        "referenceId":"0822",
+        "record" : {
+            "Attributes" : {"type" : "Account"},
+            "name" : "werw",
+            "phone" : "342332423"
+        }
+    }]
+}
+
+Response 
+
+[
+    {
+        "success": true,
+        "referenceId": "0822",
+        "Id": "0030m00000ez9FsAAI",
+        "errors": []
+    },
+    {
+        "success": true,
+        "referenceId": "0822",
+        "Id": "0010m00000kFqhaAAC",
+        "errors": []
+    }
+]
