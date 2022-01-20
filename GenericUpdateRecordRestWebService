@@ -1,0 +1,124 @@
+@RestResource(urlMapping='/composite/SObject/update/*')
+global class UpdateRestWebService {
+
+    @HttpPatch
+    global static List<ResponseWrapper> InsertRestWebService(){
+        RestRequest req = RestContext.request;
+        String jsonRequest = req.requestBody.tostring();
+        
+        RequestWrapper requestWrapper = (RequestWrapper)JSON.deserialize(jsonRequest, RequestWrapper.class);
+        
+        List<RecordWrapper> recordWrappers = requestWrapper.records;
+        
+        return createAccount(recordWrappers);
+    }
+    
+    private static List<ResponseWrapper> createAccount(List<RecordWrapper> recordWrappers) {
+
+        List<SObject> SObjectToUpdate = new List<SObject>();
+        for(RecordWrapper recordWrapper : recordWrappers) {
+            SObjectToUpdate.add(recordWrapper.record);
+        }
+        
+        System.debug(SObjectToUpdate);
+        List<ResponseWrapper> reponseToReturn = new List<ResponseWrapper>();
+        if(!SObjectToUpdate.isEmpty()){
+            Database.SaveResult[] result = Database.update(SObjectToUpdate, false);
+			System.debug(result);
+
+            for(Integer i = 0 ; i < recordWrappers.size(); i++) {
+                ResponseWrapper responseWrapperInstance = new ResponseWrapper();
+                responseWrapperInstance.referenceId = recordWrappers[i].referenceId;
+                responseWrapperInstance.errors = new List<ErrorWrapper>();
+                
+                if(result[i].isSuccess()){
+                    responseWrapperInstance.Id = result[i].getId();
+                    responseWrapperInstance.success = true;
+                }
+                
+                if(!result[i].isSuccess()){
+                    responseWrapperInstance.success = false;
+                    responseWrapperInstance.Id = '';
+                    for(Database.Error err : result[i].getErrors()){
+                        ErrorWrapper errorResponseInstance = new ErrorWrapper();
+                        errorResponseInstance.message = err.getMessage();
+                        errorResponseInstance.field = err.getFields();
+						responseWrapperInstance.errors.add(errorResponseInstance);
+                    }
+                }
+                reponseToReturn.add(responseWrapperInstance);
+            }
+        }
+        return reponseToReturn;
+    }
+    
+/********************************************************************************************************
+ * Wrapper class in Request Body and Response Body......
+ ********************************************************************************************************/
+    
+    public class RequestWrapper {
+        public String type;
+        public List<RecordWrapper> records;
+    }
+
+    public class RecordWrapper {
+        public String referenceId;
+        public SObject record;
+    }
+
+    global class ResponseWrapper {
+        public String referenceId;
+        public String Id;
+        public Boolean success;
+        public List<ErrorWrapper> errors;
+    }
+
+    public class ErrorWrapper {
+        public String message;
+        public List<String> field;
+    }
+
+}
+
+==============================================================================================================================================
+Id is manditory field and referenceId should be equal to Quoting_API_Reference__c (It is a external Id)
+=================================================================Request Body=================================================================
+
+{
+    "type" : "inscor__Customer_Quote_Line__c",
+    "records":[
+        {
+        "referenceId":"123",
+        "record" : {
+            "Attributes" : {"type" : "inscor__Customer_Quote_Line__c"},
+            "Id": "c090m000003tbGpAfI",
+            "inscor__Quantity__c" : "4",
+            "Quoting_API_Reference__c" : "123"
+        }
+        },{
+        "referenceId":"432",
+        "record" : {
+            "Attributes" : {"type" : "inscor__Customer_Quote_Line__c"},
+            "Id": "c090m000003tyGqAgI",
+            "inscor__Quantity__c" : "67",
+            "Quoting_API_Reference__c" : "432"
+        }
+    }]
+}
+
+===================================================================Response Body=========================================================================
+
+[
+    {
+        "success": true,
+        "referenceId": "123",
+        "Id": "a090m000003tbGpAAI",
+        "errors": []
+    },
+    {
+        "success": true,
+        "referenceId": "432",
+        "Id": "a090m000003tbGqAAI",
+        "errors": []
+    }
+]
