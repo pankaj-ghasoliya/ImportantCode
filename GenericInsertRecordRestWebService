@@ -1,41 +1,35 @@
-@RestResource(urlMapping='/SObject/*')
+@RestResource(urlMapping='/composite/SObject/insert/*')
 global class InsertRestWebService {
     
     @HttpPost
     global static List<ResponseWrapper> InsertRestWebService(){
         RestRequest req = RestContext.request;
         String jsonRequest = req.requestBody.tostring();
-        System.debug(jsonRequest);
         
-        RequestWrapper RequestWrapperInstnace = (RequestWrapper)JSON.deserialize(jsonRequest, RequestWrapper.class);
+        RequestWrapper requestWrapper = (RequestWrapper)JSON.deserialize(jsonRequest, RequestWrapper.class);
         
-        List<records> recordsList = RequestWrapperInstnace.records;
-        String sObjectType = RequestWrapperInstnace.Type;
+        List<RecordWrapper> recordWrappers = requestWrapper.records;
         
-        return createAccount(recordsList, sObjectType);
+        return createAccount(recordWrappers);
     }
     
-    private static List<ResponseWrapper> createAccount(List<records> recordsList, String sObjectType) {
-        
-        SObjectType sObjType = ((SObject) Type.forName(sObjectType).newInstance()).getSObjectType();
+    private static List<ResponseWrapper> createAccount(List<RecordWrapper> recordWrappers) {
 
-        List<SObject> accountToInsert = new List<SObject>(); // sobject
-        for(records reco : recordsList) {
-            //if(sObjType == Account.getSObjectType()){
-                //SObject acc = reco.record;
-                accountToInsert.add(reco.record);
-            //}
+        List<SObject> SObjectToInsert = new List<SObject>();
+        for(RecordWrapper recordWrapper : recordWrappers) {
+            SObjectToInsert.add(recordWrapper.record);
         }
         
+        System.debug(SObjectToInsert);
         List<ResponseWrapper> reponseToReturn = new List<ResponseWrapper>();
-        if(!accountToInsert.isEmpty()){
-            Database.SaveResult[] result = Database.insert(accountToInsert, false);
-            System.debug(result);
-			
-            for(Integer i = 0 ; i < recordsList.size(); i++) {
+        if(!SObjectToInsert.isEmpty()){
+            Database.SaveResult[] result = Database.insert(SObjectToInsert, false);
+			System.debug(result);
+
+            for(Integer i = 0 ; i < recordWrappers.size(); i++) {
                 ResponseWrapper responseWrapperInstance = new ResponseWrapper();
-                responseWrapperInstance.referenceId = recordsList[i].referenceId;
-                responseWrapperInstance.errors = new List<ErrorResponse>();
+                responseWrapperInstance.referenceId = recordWrappers[i].referenceId;
+                responseWrapperInstance.errors = new List<ErrorWrapper>();
                 
                 if(result[i].isSuccess()){
                     responseWrapperInstance.Id = result[i].getId();
@@ -46,7 +40,7 @@ global class InsertRestWebService {
                     responseWrapperInstance.success = false;
                     responseWrapperInstance.Id = '';
                     for(Database.Error err : result[i].getErrors()){
-                        ErrorResponse errorResponseInstance = new ErrorResponse();
+                        ErrorWrapper errorResponseInstance = new ErrorWrapper();
                         errorResponseInstance.message = err.getMessage();
                         errorResponseInstance.field = err.getFields();
 						responseWrapperInstance.errors.add(errorResponseInstance);
@@ -64,10 +58,10 @@ global class InsertRestWebService {
     
     public class RequestWrapper {
         public String type;
-        public List<records> records;
+        public List<RecordWrapper> records;
     }
     
-    public class records {
+    public class RecordWrapper {
         public String referenceId;
         public SObject record;
     }
@@ -76,10 +70,10 @@ global class InsertRestWebService {
         public String referenceId;
         public String Id;
         public Boolean success;
-        public List<ErrorResponse> errors;
+        public List<ErrorWrapper> errors;
     }
     
-    public class ErrorResponse {
+    public class ErrorWrapper {
         public String message;
         public List<String> field;
     }
