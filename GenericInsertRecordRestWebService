@@ -10,10 +10,10 @@ global class InsertRestWebService {
         
         List<RecordWrapper> recordWrappers = requestWrapper.records;
         
-        return createAccount(recordWrappers);
+        return createRecord(recordWrappers);
     }
     
-    private static List<ResponseWrapper> createAccount(List<RecordWrapper> recordWrappers) {
+    private static List<ResponseWrapper> createRecords(List<RecordWrapper> recordWrappers) {
 
         List<SObject> SObjectToInsert = new List<SObject>();
         for(RecordWrapper recordWrapper : recordWrappers) {
@@ -127,3 +127,41 @@ Response
         "errors": []
     }
 ]
+
+
+
+/**************************************************************************************************************************************************
+ ************************************************************** Test Class ************************************************************************
+ *********************************************************** Code Coverage - 100% ***************************************************************** 
+ **************************************************************************************************************************************************/
+
+@IsTest
+private class AccountWebServiceTest {
+	@IsTest
+    static void InsertRestWebServicePositiveTest() {
+        
+        RestRequest request = new RestRequest();
+        request.requestURI = 'https://keykloud3-dev-ed.my.salesforce.com/services/apexrest/Account/';
+        request.httpMethod = 'POST';
+        request.requestBody = Blob.valueOf('{"records":[{"referenceId":"234","record":{"Attributes":{"type":"Account"},"Name":"John Doe","phone":"324324","Quoting_API_Reference__c":"234"}},{"referenceId":"34432","record":{"Attributes":{"type":"Account"},"name":"Ben","phone":"324263","Quoting_API_Reference__c":"34432"}}]}');
+		RestContext.request = request;
+        System.Test.startTest();
+        AccountWebService.InsertRestWebService();
+        System.Test.stopTest();
+        
+    }
+    
+    @IsTest
+    static void InsertRestWebServiceNegitiveTest() {
+        
+        RestRequest request = new RestRequest();
+        request.requestURI = 'https://keykloud3-dev-ed.my.salesforce.com/services/apexrest/Account/';
+        request.httpMethod = 'POST';
+        request.requestBody = Blob.valueOf('{"records":[{"referenceId":"234","record":{"Attributes":{"type":"Account"},"Name":"John Doe","phone":"324324","Quoting_API_Reference__c":"234"}},{"referenceId":"234","record":{"Attributes":{"type":"Account"},"name":"Ben","phone":"324263","Quoting_API_Reference__c":"234"}}]}');
+		RestContext.request = request;
+        System.Test.startTest();
+        AccountWebService.InsertRestWebService();
+        System.Test.stopTest();
+        
+    }
+}
