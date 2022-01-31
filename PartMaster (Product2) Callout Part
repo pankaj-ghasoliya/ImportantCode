@@ -1,0 +1,349 @@
+public abstract with sharing class GL_RestCalloutBase {
+
+    protected final String BASE_END_POINT = 'http://seattle.glinfolab.in';
+    protected final String HEADER_CONTENT_TYPE = 'Content-Type';
+    protected final String HEADER_CONTENT_TYPE_APPLICATION_JSON = 'application/json';
+    protected final String HEADER_AUTHORIZATION = 'Authorization';
+    protected final String HEADER_BEARER_AUTHORIZATION = 'Bearer ';
+    protected final String HTTP_METHOD_GET = 'GET';
+    protected final String HTTP_METHOD_POST = 'POST';
+    protected final Integer DEFAULT_TIMEOUT = 120000;
+    protected final GL_EndPointAPI_Path__c END_POINT_PATH = GL_EndPointAPI_Path__c.getOrgDefaults();
+    protected String HEADER_TOKEN = '';
+    protected HttpRequest request;
+    protected HttpResponse response;
+
+    protected void doCallout() {
+        this.response = new Http().send(request);
+    }
+
+    protected void setBody(String requestBody) {
+        this.request.setBody(requestBody);
+    }
+
+    protected Boolean isStatusCodeOk() {
+        return response.getStatusCode() == 200;
+    }
+
+    protected Integer getResponseStatusCode() {
+        return response.getStatusCode();
+    }
+
+    protected String getResponseBody() {
+        return response.getBody();
+    }
+
+    protected void setTokenInHeader() {
+        this.request.setHeader(HEADER_AUTHORIZATION, HEADER_BEARER_AUTHORIZATION + HEADER_TOKEN);
+    }
+ 
+    protected virtual HttpRequest createRequest(String method, String end_pointPath) {
+        request = new HttpRequest();
+        request.setEndpoint(BASE_END_POINT + end_pointPath);
+        request.setHeader(HEADER_CONTENT_TYPE, HEADER_CONTENT_TYPE_APPLICATION_JSON);
+        request.setMethod(method);
+        return request;
+    }
+
+
+    // Fetching Token : Start
+    public Boolean setToken() {
+        createRequest(HTTP_METHOD_POST, END_POINT_PATH.Login_Path__c);
+        setBody(GL_INFOUtils.getRequestBodyForLogin());
+        doCallout();
+        if(isStatusCodeOk()){
+            ResponseWrapper responseWrapper = (ResponseWrapper)JSON.deserializeStrict(getResponseBody(), ResponseWrapper.class);
+            HEADER_TOKEN = responseWrapper.data.token;
+            return true;
+        }else {
+            return false;
+        }
+    }
+
+    // Wrapper class ResponseWrapper member 
+    public class DataWrapper {
+        public String token;
+    }
+
+    // Wrapper class for response
+    public class ResponseWrapper {
+        public String message;
+        public Boolean success; 
+        public DataWrapper data;    
+    }
+    // Fetching Token : End
+    
+}
+
+===============================================================================================================================================================================
+
+
+public with sharing class GL_INFOUtils {
+    public static String getRequestBodyForLogin() {
+        GL_RestCallout__c restCalloutCustomSetting = GL_RestCallout__c.getOrgDefaults();
+        JSONGenerator jsonGenerator = JSON.createGenerator(true);
+        jsonGenerator.writeStartObject();
+        jsonGenerator.writeStringField('_UserId', restCalloutCustomSetting.UserId__c);
+        jsonGenerator.writeStringField('_Password', restCalloutCustomSetting.Password__c);
+        jsonGenerator.writeEndObject();
+        String requestBody = jsonGenerator.getAsString();
+        System.debug('requestBody >> '+ requestBody);
+        return requestBody;
+    }
+
+    public class DataWrapper{
+        public string referenceId;
+        public string status;
+    }
+
+	public class ResponseWrapper {
+        public String message;
+        public Boolean success; 
+        public List<DataWrapper> data;    
+    }
+
+}
+
+================================================================================================================================================================================
+
+
+global class Batch_GLCreatePartMaster extends GL_RestCalloutBase implements Database.Batchable<sObject>,Database.AllowsCallouts {
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        //String productId = '01t0m000005g6edAAA';
+        String query = 'select Id, Name, inscor__Keyword__c, inscor__MFR_Code__c, inscor__MFG_Code__c, inscor__UOM__c, inscor__Status__c,'+
+        ' IsActive, Schedule_B__c, inscor__MFG_Name__c, inscor__Country_of_Origin__c, inscor__Preferred_Supplier__c, inscor__Country_of_Manufacture__c,'+
+        ' StockKeepingUnit, inscor__Weight_Units__c, inscor__Gross_Weight__c, inscor__Net_Weight__c, inscor__Dimension_Units__c, inscor__Length__c, inscor__Width__c,'+  
+        ' inscor__Height__c, inscor__Product_Type__c, inscor__Product_Line__c, inscor__Serialized__c, inscor__Non_Inventory_Item__c, inscor__Hot_Part__c,'+
+        ' inscor__Life_Limited__c, inscor__Kit__c, inscor__Shelf_Life__c, inscor__Shelf_Life_Time__c, inscor__HazMat__c, inscor__HazMat_Id__c, inscor__Proper_Ship_Name__c, Quoting_API_Reference__c,'+
+        ' inscor__HazMat_Class_Div__c, inscor__Packing_Type__c, inscor__Packing_Instructions__c, inscor__ECCN__c, inscor__Export_Control__c, inscor__EAR__c, inscor__ITAR__c, inscor__Internal_Comments__c,'+
+        ' inscor__HS_Code__c, inscor__HTS_Code__c, inscor__List_Price__c, inscor__List_Price_Date__c, Core_Value__c, inscor__Avg_Lead_Time__c, Available_For_Sync__c, Is_Processed__c, Last_Sync_Time__c,'+
+        ' State__c FROM Product2' +
+       // ' WHERE Id =\'' + productId + '\' AND Available_For_Sync__c = true';
+        ' WHERE Available_For_Sync__c = true';
+
+        System.debug(query);
+        return Database.getQueryLocator(query);
+        
+    }
+
+    global void execute(Database.BatchableContext bc, List<Product2> products){
+        processGLCreatePartMasters(products);
+    }
+    
+    global void finish(Database.BatchableContext bc){
+        
+    }
+
+    public void processGLCreatePartMasters(List<Product2> products){
+
+        setToken();//to set token for rest callout
+        createRequest(HTTP_METHOD_POST, END_POINT_PATH.CreatePartMaster_Path__c);
+        
+        setTokenInHeader();
+        setBody('getRequestBodyForCreatePartMaster(products)  >> '+getRequestBodyForCreatePartMaster(products));
+        doCallout();
+        if(isStatusCodeOk()){
+            string responseBody = getResponseBody();
+
+            GL_INFOUtils.ResponseWrapper responseWrapper = (GL_INFOUtils.ResponseWrapper)JSON.deserialize(responseBody, GL_INFOUtils.ResponseWrapper.class);
+            
+            updatePartMaster(products, responseWrapper);
+
+        }else {
+            System.debug('responseBody >> null');
+        }
+    }
+
+    public static void updatePartMaster(List<Product2> products, GL_INFOUtils.ResponseWrapper responseWrapper) {
+
+        Map<String, GL_INFOUtils.DataWrapper> dataWrapperByAccountId = new Map<String, GL_INFOUtils.DataWrapper>(); 
+            for(GL_INFOUtils.DataWrapper dataWrapper : responseWrapper.data) {
+                dataWrapperByAccountId.put(dataWrapper.referenceId, dataWrapper);
+            }
+            
+            for(Product2 product : products){
+                if(dataWrapperByAccountId.containsKey(product.Id)){
+                    GL_INFOUtils.DataWrapper dataWrapper = dataWrapperByAccountId.get(product.Id);
+                    if(dataWrapper.status.contains('Created') || dataWrapper.status.contains('Updated')){
+                        product.State__c = dataWrapper.status; // created
+                        product.Available_For_Sync__c = false;
+                    }
+                    else{
+                        product.Error_Message__c = dataWrapper.status; // already 
+                        product.Available_For_Sync__c = true; // 
+                    }
+                }
+                else{
+                    product.Available_For_Sync__c = true;
+                    product.Error_Message__c = responseWrapper.message;
+                }
+                product.Is_Processed__c = true;
+                product.Last_Sync_Time__c = Datetime.now();
+            }
+        
+        update products;
+
+    } 
+
+    public static String getRequestBodyForCreatePartMaster(List<Product2> products) {
+        String requestBody;
+        if(!products.isEmpty()){
+            JSONGenerator jsonGenerator = JSON.createGenerator(true);
+            jsonGenerator.writeStartArray();
+            for(Product2 product : products) {
+                jsonGenerator.writeStartObject();
+                jsonGenerator.writeStringField('_ReferenceId', product.Id);  // required
+                jsonGenerator.writeStringField('_PartNumber', product.Name);  // required
+                jsonGenerator.writeStringField('_SFPartRefId', product.Id);   // required
+                jsonGenerator.writeStringField('_Keyword', product.inscor__Keyword__c == null ? '' : product.inscor__Keyword__c);   // required
+                jsonGenerator.writeStringField('_MFRCode', product.inscor__MFR_Code__c == null ? '' : product.inscor__MFR_Code__c);
+                jsonGenerator.writeStringField('_MFGCode', product.inscor__MFG_Code__c == null ? '' : product.inscor__MFG_Code__c);
+                jsonGenerator.writeStringField('_UOM', product.inscor__UOM__c == null ? '': product.inscor__UOM__c);
+                jsonGenerator.writeStringField('_Status', product.inscor__Status__c == null ? '' : product.inscor__Status__c);
+                jsonGenerator.writeBooleanField('_Active', product.IsActive);
+                jsonGenerator.writeStringField('_ScheduleB', product.Schedule_B__c == null ? '' : product.Schedule_B__c);
+                jsonGenerator.writeStringField('_MFGName', product.inscor__MFG_Name__c == null ? '' : product.inscor__MFG_Name__c);
+                jsonGenerator.writeStringField('_CountryofOrigin', product.inscor__Country_of_Origin__c == null ? '' : product.inscor__Country_of_Origin__c);
+                jsonGenerator.writeStringField('_PreferredSupplier', product.inscor__Preferred_Supplier__c == null ? '' : product.inscor__Preferred_Supplier__c);
+                jsonGenerator.writeStringField('_CountryofManufacture', product.inscor__Country_of_Manufacture__c == null ? '' : product.inscor__Country_of_Manufacture__c);
+                jsonGenerator.writeStringField('_PartMasterSKU', product.StockKeepingUnit == null ? '' : product.StockKeepingUnit);
+                jsonGenerator.writeStringField('_WeightUnits', product.inscor__Weight_Units__c == null ? '' : product.inscor__Weight_Units__c);
+                jsonGenerator.writeNumberField('_GrossWeight', product.inscor__Gross_Weight__c == null ? 0.0 : Integer.valueOf(product.inscor__Gross_Weight__c));
+                jsonGenerator.writeNumberField('_NetWeight',  product.inscor__Net_Weight__c == null ? 0.0 : Integer.valueOf(product.inscor__Net_Weight__c));
+                jsonGenerator.writeStringField('_DimensionUnits', product.inscor__Dimension_Units__c == null ? '' : product.inscor__Dimension_Units__c);
+                jsonGenerator.writeNumberField('_Length',  product.inscor__Length__c == null ? 0.0 : Integer.valueOf(product.inscor__Length__c));
+                jsonGenerator.writeNumberField('_Width', product.inscor__Width__c == null ? 0.0 : Integer.valueOf(product.inscor__Width__c));
+                jsonGenerator.writeNumberField('_Height', product.inscor__Height__c == null ? 0.0 : Integer.valueOf(product.inscor__Height__c));
+                jsonGenerator.writeStringField('_ProductType', product.inscor__Product_Type__c == null ? '' : product.inscor__Product_Type__c);
+                jsonGenerator.writeStringField('_ProductLine', product.inscor__Product_Line__c == null ? '' : product.inscor__Product_Line__c);
+                jsonGenerator.writeStringField('_Serialized', product.inscor__Serialized__c == null ? '' : String.valueOf(product.inscor__Serialized__c));
+                jsonGenerator.writeStringField('_NonInventoryItem', product.inscor__Non_Inventory_Item__c == null ? '' : String.valueOf(product.inscor__Non_Inventory_Item__c));
+                jsonGenerator.writeStringField('_HotPart', product.inscor__Hot_Part__c == null ? '' : String.valueOf(product.inscor__Hot_Part__c));
+                jsonGenerator.writeStringField('_LifeLimited', product.inscor__Life_Limited__c == null ? '' : String.valueOf(product.inscor__Life_Limited__c));
+                jsonGenerator.writeStringField('_Kit', product.inscor__Kit__c == null ? '' : String.valueOf(product.inscor__Kit__c));
+                jsonGenerator.writeStringField('_ShelfLife', product.inscor__Shelf_Life__c == null ? '' : String.valueOf(product.inscor__Shelf_Life__c));
+                jsonGenerator.writeNumberField('_ShelfLifeTime', product.inscor__Shelf_Life_Time__c == null ? 0.0 : Integer.valueOf(product.inscor__Shelf_Life_Time__c));
+                jsonGenerator.writeStringField('_HazMat', product.inscor__HazMat__c == null ? '' : String.valueOf(product.inscor__HazMat__c));
+                jsonGenerator.writeStringField('_HazMatId', product.inscor__HazMat_Id__c == null ? '' : product.inscor__HazMat_Id__c);
+                jsonGenerator.writeStringField('_ProperShipName', product.inscor__Proper_Ship_Name__c == null ? '' : product.inscor__Proper_Ship_Name__c);
+                jsonGenerator.writeStringField('_HazMatClass', product.inscor__HazMat_Class_Div__c == null ? '' : product.inscor__HazMat_Class_Div__c);
+                jsonGenerator.writeStringField('_PackingType', product.inscor__Packing_Type__c == null ? '' : product.inscor__Packing_Type__c);
+                jsonGenerator.writeStringField('_PackingInstructions', product.inscor__Packing_Instructions__c == null ? '' : product.inscor__Packing_Instructions__c);
+                jsonGenerator.writeStringField('_ECCN', product.inscor__ECCN__c == null ? '' : product.inscor__ECCN__c);
+                jsonGenerator.writeStringField('_ExportControl', product.inscor__Export_Control__c == null ? '' : product.inscor__Export_Control__c);
+                jsonGenerator.writeStringField('_EAR', product.inscor__EAR__c == null ? '' : product.inscor__EAR__c);
+                jsonGenerator.writeStringField('_ITAR', product.inscor__ITAR__c == null ? '' : product.inscor__ITAR__c);
+                jsonGenerator.writeStringField('_HSCode', product.inscor__HS_Code__c == null ? '' : product.inscor__HS_Code__c);
+                jsonGenerator.writeStringField('_HTSCode', product.inscor__HTS_Code__c == null ? '' : product.inscor__HTS_Code__c);
+                jsonGenerator.writeNumberField('_ListPrice', product.inscor__List_Price__c == null ? 0.0 : Integer.valueOf(product.inscor__List_Price__c));
+                jsonGenerator.writeNumberField('_CoreValue', product.Core_Value__c == null ? 0.0 : Integer.valueOf(product.Core_Value__c));
+                jsonGenerator.writeNumberField('_AvgLeadTime', product.inscor__Avg_Lead_Time__c == null ? 0.0 : Integer.valueOf(product.inscor__Avg_Lead_Time__c));
+                jsonGenerator.writeStringField('_ListPriceDate', product.inscor__List_Price_Date__c == null ? '' : String.valueOf(product.inscor__List_Price_Date__c));
+                jsonGenerator.writeStringField('_InternalComments', product.inscor__Internal_Comments__c == null ? '' : String.valueOf(product.inscor__Internal_Comments__c));
+                jsonGenerator.writeStringField('_QuotingAPReference', product.Quoting_API_Reference__c == null ? '' : String.valueOf(product.Quoting_API_Reference__c));
+
+               if(product.State__c == 'Not Created'){
+                    jsonGenerator.writeStringField('_IsEdit','false');   // required
+                }else {
+                    jsonGenerator.writeStringField('_IsEdit','true');  // update
+                }
+                jsonGenerator.writeEndObject();
+            }
+            jsonGenerator.writeEndArray();
+            requestBody = jsonGenerator.getAsString();
+        }
+        return requestBody; 
+    }
+    
+}
+
+
+================================================================================================================================================================================
+Test Class with mock and with 92 % coverage.
+================================================================================================================================================================================
+
+@IsTest
+global class Batch_GLCreatePartMasterTest implements HttpCalloutMock {
+   
+    // Implement this interface method   
+    global HttpResponse respond(HttpRequest Request){
+        
+        // Create a fake response
+        HttpResponse response = new HttpResponse();
+        if(Request.getEndpoint().contains('/api/Seattle/Login')){
+            
+            response.setHeader('Content-Type', 'application/json');
+            response.setHeader('Accept', 'application/json');
+            response.setBody('{"Message":"Success","Success":true,"Data":{"Token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJuYmYiOjE2Mzk2NDc5MDUsImV4cCI6MTYzOTY2MjMwNSwiaWF0IjoxNjM5NjQ3OTA1LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwNDUxIiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdDozMDQ1MSJ9.QQ2UDCjVJIiEpCGctNHJRFRvPSvzrAqEcZV35aj4XAY"}}');
+            response.setStatusCode(200);
+            System.assertEquals(200,response.getStatusCode(), 'The status code is not 200.');
+           
+        }
+        else if(Request.getEndpoint().contains('/api/Seattle/CreatePartMaster')){
+           
+            response.setHeader('Content-Type', 'application/json');
+            response.setHeader('Accept', 'application/json');
+            response.setBody('{"Message":"Success","Success":true,"Data":[{"ReferenceId":"001","Status":"Created"}]}');
+            response.setStatusCode(200);
+            System.assertEquals(200,response.getStatusCode(), 'The status code is not 200.');
+           
+        }
+        return response;
+    }
+
+    @IsTest 
+    static void calloutTest() {
+        
+        Test.setMock(HttpCalloutMock.class, new Batch_GLCreatePartMasterTest());
+
+        GL_EndPointAPI_Path__c endpoint = new GL_EndPointAPI_Path__c(
+            CreatePartMaster_Path__c = '/api/Seattle/CreatePartMaster',
+            Login_Path__c = '/api/Seattle/Login'
+        );
+        insert endpoint;
+
+        GL_RestCallout__c restCallout = new GL_RestCallout__c(
+            UserId__c = 'KeyKloud',
+            Password__c = 'KeyKloud@123'
+        );
+        insert restCallout;
+        
+        Product2 product = new Product2(
+            Name = 'ewr',
+            inscor__Keyword__c = 'esf'
+        );
+        insert product;
+       
+        Test.startTest();
+        Batch_GLCreatePartMaster myBatchObject = new Batch_GLCreatePartMaster();
+        Id batchId = Database.executeBatch(myBatchObject);
+        Test.stopTest();
+    } 
+}
+
+================================================================================================================================================================================
+Create fields on the object.
+=================================================================================================================================================================================
+
+GL Section Fields need to created on object
+Name - Available For Sync
+  Type - checkbox
+  default - true
+
+Name - Is Processed
+  Type - Checkbox
+  default - false
+  
+Name - Last Sync Time
+  Type - Data/Time
+  default - blank
+  
+Name - Error Message
+  Type - Text Area Length -long
+  default - Blank
+
+5. Name - State
+  a. Type - Picklist
+  b. values - (Not created, Created, Updated)
+  b. default - Not Created
+
