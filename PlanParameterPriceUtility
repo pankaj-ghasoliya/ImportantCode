@@ -1,0 +1,21 @@
+public without sharing class PlanParameterPriceUtility {
+    public static Map<String, List<Plan_Parameter_Price__c>> getPlanParameterPriceMap(String projectType){
+        
+        List<Plan_Parameter_Type__c> planParameterTypes = [SELECT Id,
+                                                           API_Label__c, Projekt_Type__r.Name,
+                                                           (SELECT Id, Name, Price_Faktor__c FROM Plan_Parameter_Prices__r)
+                                                           FROM Plan_Parameter_Type__c
+                                                           WHERE Projekt_Type__r.Name =: projectType];
+        System.debug('planParameterTypes >>' + planParameterTypes);
+        
+        // create a map API_Label__c as key and List<Plan_Parameter_Price__c> as value.
+        Map<String, List<Plan_Parameter_Price__c>> pricingVariables = new Map<String, List<Plan_Parameter_Price__c>>();
+        
+        for(Plan_Parameter_Type__c planParameterType : planParameterTypes){
+            pricingVariables.put(planParameterType.API_Label__c, planParameterType.Plan_Parameter_Prices__r);
+        }
+        System.debug('pricingVariables >> '+ pricingVariables);
+        
+        return pricingVariables;
+    }
+}
