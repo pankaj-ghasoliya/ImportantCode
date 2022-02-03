@@ -1,0 +1,72 @@
+@RestResource(urlMapping='/insert/*')
+global class InsertRestWebService {
+    
+    @HttpPost
+    global static List<ResponseWrapper> InsertRestWebService(){
+        RestRequest req = RestContext.request;
+        String jsonRequest = req.requestBody.tostring();
+        
+        RequestWrapper requestWrapper = (RequestWrapper)JSON.deserialize(jsonRequest, RequestWrapper.class);
+        System.debug('requestWrapper >> '+ requestWrapper);
+        
+        List<SObject> recordList = requestWrapper.records;
+        System.debug('recordList >> '+ recordList);
+        
+        return createRecords(recordList);
+    }
+    
+    private static List<ResponseWrapper> createRecords(List<SObject> recordList) {
+        List<ResponseWrapper> reponseToReturn = new List<ResponseWrapper>();
+        if(!recordList.isEmpty()){
+            Database.SaveResult[] result = Database.insert(recordList, false);
+            System.debug(result);
+            
+            for(Integer i = 0; i < recordList.size(); i++){
+               
+                ResponseWrapper responseWrapperInstance = new ResponseWrapper();
+				responseWrapperInstance.referenceId = String.valueOf(recordList[i].get('Quoting_API_Reference__c'));
+				responseWrapperInstance.errors = new List<ErrorWrapper>();
+
+                if(result[i].isSuccess()){
+                    responseWrapperInstance.Id = result[i].getId();
+                    responseWrapperInstance.success = true;
+                }
+                
+                if(!result[i].isSuccess()){
+                    responseWrapperInstance.success = false;
+                    responseWrapperInstance.Id = '';
+                    for(Database.Error err : result[i].getErrors()){
+                        ErrorWrapper errorResponseInstance = new ErrorWrapper();
+                        errorResponseInstance.message = err.getMessage();
+                        errorResponseInstance.field = err.getFields();
+						responseWrapperInstance.errors.add(errorResponseInstance);
+                    }
+                }
+                reponseToReturn.add(responseWrapperInstance);
+            }
+        }
+        return reponseToReturn;
+    }
+    
+/********************************************************************************************************
+ * Wrapper class in Request Body and Response Body......
+ ********************************************************************************************************/
+    
+    public class RequestWrapper {
+       public List<SObject> records;
+    }
+    
+    global class ResponseWrapper {
+        public String referenceId;				
+        public String Id;
+        public Boolean success;
+        public List<ErrorWrapper> errors;					  
+    }
+    
+    public class ErrorWrapper {
+        public String message;
+        public List<String> field;
+    }
+
+}
+===========================================
